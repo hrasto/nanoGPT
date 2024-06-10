@@ -21,6 +21,7 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+import datetime
 
 import numpy as np
 import torch
@@ -30,48 +31,54 @@ from torch.distributed import init_process_group, destroy_process_group
 from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
-# default config values designed to train a gpt2 (124M) on OpenWebText
+# no: default config values designed to train a gpt2 (124M) on OpenWebText
+# yes: default config values to train a char-lvl baby gpt on shakespear, because I wan't to use breakpoints
 # I/O
-out_dir = 'out'
-eval_interval = 2000
-log_interval = 1
-eval_iters = 200
+
+out_dir = 'out-shakespeare-tiktoken'
+eval_interval = 250 # keep frequent because we'll overfit
+eval_iters = 20
+log_interval = 10 # don't print too too often
 eval_only = False # if True, script exits right after the first eval
-always_save_checkpoint = True # if True, always save a checkpoint after each eval
+
+# we expect to overfit on this small dataset, so only save when val improves
+always_save_checkpoint = False
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
-wandb_project = 'owt'
-wandb_run_name = 'gpt2' # 'run' + str(time.time())
+wandb_project = 'babylm'
+wandb_run_name = 'shakespeare-char'
 # data
-dataset = 'openwebtext'
-gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
-batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
-block_size = 1024
+dataset = 'shakespeare_char'
+gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
+block_size = 256
 # model
-n_layer = 12
-n_head = 12
-n_embd = 768
+n_layer = 6
+n_head = 8
+n_embd = 128
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
-# adamw optimizer
-learning_rate = 6e-4 # max learning rate
-max_iters = 600000 # total number of training iterations
+
+learning_rate = 1e-3 # with baby networks can afford to go a bit higher
+max_iters = 5000
+lr_decay_iters = 5000 # make equal to max_iters usually
+min_lr = 1e-4 # learning_rate / 10 usually
 weight_decay = 1e-1
 beta1 = 0.9
-beta2 = 0.95
+beta2 = 0.99 # make a bit bigger because number of tokens per iter is small
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
-# learning rate decay settings
 decay_lr = True # whether to decay the learning rate
-warmup_iters = 2000 # how many steps to warm up for
-lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
-min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+warmup_iters = 100 # not super necessary potentially
+
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+#device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = 'mps'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = True # use PyTorch 2.0 to compile the model to be faster
+compile = False # use PyTorch 2.0 to compile the model to be faster
+
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -217,13 +224,13 @@ def estimate_loss():
     out = {}
     model.eval()
     for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters)
+        loss_sum = 0
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y)
-            losses[k] = loss.item()
-        out[split] = losses.mean()
+                logits, loss = model(X, Y, loss_reduction='sum')
+            loss_sum += loss.item()
+        out[split] = loss_sum
     model.train()
     return out
 
@@ -244,7 +251,7 @@ def get_lr(it):
 # logging
 if wandb_log and master_process:
     import wandb
-    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    wandb.init(project=wandb_project, name=wandb_run_name+'_'+datetime.datetime.now().isoformat(), config=config)
 
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
