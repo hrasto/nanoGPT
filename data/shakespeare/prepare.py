@@ -11,7 +11,7 @@ import numpy as np
 import segutil
 import itertools
 import tiktoken
-#__file__='/Users/rastislavhronsky/ML-research/nanoGPT/data/shakespeare_char/prepare.py'
+__file__='/Users/rastislavhronsky/ML-research/nanoGPT/data/shakespeare/prepare.py'
 # download the tiny shakespeare dataset
 input_file_path = os.path.join(os.path.dirname(__file__), 'input.txt')
 if not os.path.exists(input_file_path):
@@ -46,3 +46,14 @@ cps_test = segutil.Corpus(data_test, segmentation={'char': char_seg_test,
                                                      'block': block_seg_test},)
 cps_train.save('cps_train.pkl')
 cps_test.save('cps_test.pkl')
+pad_token = '<PAD>'
+
+vocab_char = segutil.build_vocab(data_train, sort_by='alpha', unk_token=None)
+vocab_char.add_type(pad_token)
+print('char vocab size: ', len(vocab_char))
+gpt_types = gptenc.decode_tokens_bytes(list(range(gptenc.n_vocab)))
+gpt_vocab = segutil.build_vocab(gpt_types, sort_by='dont', unk_token=None)
+gpt_vocab.add_type(pad_token)
+print('tiktoken vocab size: ', len(gpt_vocab))
+vocab_char.save('vocab_char.pkl')
+gpt_vocab.save('vocab_gpt.pkl')

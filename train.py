@@ -31,13 +31,12 @@ from torch.distributed import init_process_group, destroy_process_group
 from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
-# no: default config values designed to train a gpt2 (124M) on OpenWebText
-# yes: default config values to train a char-lvl baby gpt on shakespear, because I wan't to use breakpoints
+# default config values to train a char-lvl baby gpt on shakespear, because I wan't to use breakpoints
 # I/O
 
 out_dir = 'out-shakespeare-tiktoken'
 eval_interval = 250 # keep frequent because we'll overfit
-eval_iters = 20
+eval_iters = -1
 log_interval = 10 # don't print too too often
 eval_only = False # if True, script exits right after the first eval
 
@@ -49,10 +48,10 @@ wandb_log = False # disabled by default
 wandb_project = 'babylm'
 wandb_run_name = 'shakespeare-char'
 # data
-dataset = 'shakespeare_char'
+dataset = 'shakespeare'
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
 batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
-block_size = 256
+#block_size = 256 block_size ide do pice, determinovane v segutil.Corpus
 # model
 n_layer = 6
 n_head = 8
@@ -105,8 +104,8 @@ else:
     master_process = True
     seed_offset = 0
     ddp_world_size = 1
-tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
-print(f"tokens per iteration will be: {tokens_per_iter:,}")
+#tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
+#print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
@@ -118,8 +117,14 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-# poor man's data loader
+# zebracky data loader
 data_dir = os.path.join('data', dataset)
+corpus = {}
+for split in ['train', 'test']: 
+    with open(os.path.join(data_dir, 'cps_train.pkl'), 'rb') as f: 
+        corpus[split] = pickle.load(f)
+
+exit()
 def get_batch(split):
     # We recreate np.memmap every batch to avoid a memory leak, as per
     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
