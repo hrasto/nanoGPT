@@ -35,7 +35,7 @@ from model import GPTConfig, GPT
 # I/O
 
 out_dir = 'out-shakespeare-gpt'
-eval_interval = 50 # keep frequent because we'll overfit
+eval_interval = 100 # keep frequent because we'll overfit
 log_interval = 10 # don't print too too often
 eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
@@ -45,8 +45,8 @@ always_save_checkpoint = False
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
-wandb_project = 'babylm'
-wandb_run_name = 'shakespeare-char'
+wandb_project = 'shakespeare'
+wandb_run_name = 'shakespeare-gpt'
 # data
 #dataset = 'shakespeare-char'
 dataset = 'shakespeare'
@@ -306,13 +306,13 @@ while True:
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
+                "train/loss": loss_train,
+                "val/loss": loss_val,
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
             })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
-            best_val_loss = losses['val']
+        if loss_val < best_val_loss or always_save_checkpoint:
+            best_val_loss = loss_val
             if iter_num > 0:
                 checkpoint = {
                     'model': raw_model.state_dict(),

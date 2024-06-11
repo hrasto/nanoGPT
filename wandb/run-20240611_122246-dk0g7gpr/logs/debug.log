@@ -1,0 +1,29 @@
+2024-06-11 12:22:46,451 INFO    MainThread:14247 [wandb_setup.py:_flush():76] Current SDK version is 0.17.0
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_setup.py:_flush():76] Configure stats pid to 14247
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_setup.py:_flush():76] Loading settings from /Users/rastislavhronsky/.config/wandb/settings
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_setup.py:_flush():76] Loading settings from /Users/rastislavhronsky/ML-research/nanoGPT/wandb/settings
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_setup.py:_flush():76] Loading settings from environment variables: {}
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': False}
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'train.py', 'program_abspath': '/Users/rastislavhronsky/ML-research/nanoGPT/train.py', 'program': '/Users/rastislavhronsky/ML-research/nanoGPT/train.py'}
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_setup.py:_flush():76] Applying login settings: {}
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_init.py:_log_setup():520] Logging user logs to /Users/rastislavhronsky/ML-research/nanoGPT/wandb/run-20240611_122246-dk0g7gpr/logs/debug.log
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_init.py:_log_setup():521] Logging internal logs to /Users/rastislavhronsky/ML-research/nanoGPT/wandb/run-20240611_122246-dk0g7gpr/logs/debug-internal.log
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_init.py:init():560] calling init triggers
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_init.py:init():567] wandb.init called with sweep_config: {}
+config: {'out_dir': 'out-shakespeare-char', 'eval_interval': 100, 'log_interval': 10, 'eval_iters': 100, 'eval_only': False, 'always_save_checkpoint': False, 'init_from': 'scratch', 'wandb_log': True, 'wandb_project': 'shakespeare', 'wandb_run_name': 'shakespeare-char', 'dataset': 'shakespeare-char', 'gradient_accumulation_steps': 1, 'batch_size': 64, 'block_size': 100, 'n_layer': 6, 'n_head': 8, 'n_embd': 128, 'dropout': 0.0, 'bias': False, 'learning_rate': 0.001, 'max_iters': 5000, 'lr_decay_iters': 5000, 'min_lr': 0.0001, 'weight_decay': 0.1, 'beta1': 0.9, 'beta2': 0.99, 'grad_clip': 1.0, 'decay_lr': True, 'warmup_iters': 100, 'backend': 'nccl', 'device': 'mps', 'dtype': 'float16', 'compile': False}
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_init.py:init():610] starting backend
+2024-06-11 12:22:46,452 INFO    MainThread:14247 [wandb_init.py:init():614] setting up manager
+2024-06-11 12:22:46,453 INFO    MainThread:14247 [backend.py:_multiprocessing_setup():105] multiprocessing start_methods=spawn,fork,forkserver, using: spawn
+2024-06-11 12:22:46,455 INFO    MainThread:14247 [wandb_init.py:init():622] backend started and connected
+2024-06-11 12:22:46,457 INFO    MainThread:14247 [wandb_init.py:init():711] updated telemetry
+2024-06-11 12:22:46,475 INFO    MainThread:14247 [wandb_init.py:init():744] communicating run to backend with 90.0 second timeout
+2024-06-11 12:22:46,807 INFO    MainThread:14247 [wandb_run.py:_on_init():2396] communicating current version
+2024-06-11 12:22:46,849 INFO    MainThread:14247 [wandb_run.py:_on_init():2405] got version response upgrade_message: "wandb version 0.17.1 is available!  To upgrade, please run:\n $ pip install wandb --upgrade"
+
+2024-06-11 12:22:46,850 INFO    MainThread:14247 [wandb_init.py:init():795] starting run threads in backend
+2024-06-11 12:22:49,072 INFO    MainThread:14247 [wandb_run.py:_console_start():2374] atexit reg
+2024-06-11 12:22:49,073 INFO    MainThread:14247 [wandb_run.py:_redirect():2229] redirect: wrap_raw
+2024-06-11 12:22:49,073 INFO    MainThread:14247 [wandb_run.py:_redirect():2294] Wrapping output streams.
+2024-06-11 12:22:49,073 INFO    MainThread:14247 [wandb_run.py:_redirect():2319] Redirects installed.
+2024-06-11 12:22:49,074 INFO    MainThread:14247 [wandb_init.py:init():838] run started, returning control to user process
+2024-06-11 12:50:21,287 WARNING MsgRouterThr:14247 [router.py:message_loop():77] message_loop has been closed

@@ -1,0 +1,52 @@
+{
+    "os": "macOS-14.5-arm64-arm-64bit",
+    "python": "3.12.2",
+    "heartbeatAt": "2024-06-11T10:21:45.742368",
+    "startedAt": "2024-06-11T10:21:44.854803",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "config/train_shakespeare_char.py",
+        "--wandb_log=True"
+    ],
+    "state": "running",
+    "program": "/Users/rastislavhronsky/ML-research/nanoGPT/train.py",
+    "codePathLocal": "train.py",
+    "codePath": "train.py",
+    "git": {
+        "remote": "git@github.com:hrasto/nanoGPT.git",
+        "commit": "76c2d19c1eb408a75ca6603f51b5644241a7d1a4"
+    },
+    "email": "hronskyr@gmail.com",
+    "root": "/Users/rastislavhronsky/ML-research/nanoGPT",
+    "host": "Rastislavs-MacBook-Pro.local",
+    "username": "rastislavhronsky",
+    "executable": "/opt/homebrew/Caskroom/miniforge/base/envs/ML12/bin/python",
+    "cpu_count": 8,
+    "cpu_count_logical": 8,
+    "cpu_freq": {
+        "current": 3228,
+        "min": 600,
+        "max": 3228
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3228,
+            "min": 600,
+            "max": 3228
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 460.4317207336426,
+            "used": 413.03002548217773
+        }
+    },
+    "gpuapple": {
+        "type": "Apple M1 Pro",
+        "vendor": "sppci_vendor_Apple"
+    },
+    "memory": {
+        "total": 16.0
+    }
+}
