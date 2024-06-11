@@ -34,10 +34,10 @@ from model import GPTConfig, GPT
 # default config values to train a char-lvl baby gpt on shakespear, because I wan't to use breakpoints
 # I/O
 
-out_dir = 'out-shakespeare-tiktoken'
-eval_interval = 250 # keep frequent because we'll overfit
-eval_iters = -1
+out_dir = 'out-shakespeare-gpt'
+eval_interval = 50 # keep frequent because we'll overfit
 log_interval = 10 # don't print too too often
+eval_iters = 100
 eval_only = False # if True, script exits right after the first eval
 
 # we expect to overfit on this small dataset, so only save when val improves
@@ -48,10 +48,15 @@ wandb_log = False # disabled by default
 wandb_project = 'babylm'
 wandb_run_name = 'shakespeare-char'
 # data
+#dataset = 'shakespeare-char'
 dataset = 'shakespeare'
+
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
 batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
-#block_size = 256 block_size ide do pice, determinovane v segutil.Corpus
+
+block_size = 31 # 100±3B with gpt
+#block_size = 62 # 200±7B with gpt
+
 # model
 n_layer = 6
 n_head = 8
@@ -119,12 +124,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # zebracky data loader
 data_dir = os.path.join('data', dataset)
-corpus = {}
-for split in ['train', 'test']: 
-    with open(os.path.join(data_dir, 'cps_train.pkl'), 'rb') as f: 
-        corpus[split] = pickle.load(f)
 
-exit()
 def get_batch(split):
     # We recreate np.memmap every batch to avoid a memory leak, as per
     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
@@ -154,6 +154,10 @@ if os.path.exists(meta_path):
         meta = pickle.load(f)
     meta_vocab_size = meta['vocab_size']
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
+
+if meta_vocab_size is None: 
+    import tiktoken
+    gptenc = tiktoken.get_encoding('gpt2')
 
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
@@ -224,18 +228,40 @@ if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
+bytes_per_batch = []
+for split in ['train', 'val']:
+    for _ in range(20):
+        X, Y = get_batch(split)
+        Y = Y.cpu().detach().numpy()
+        if meta_vocab_size is not None: 
+            byte_per_type = meta.get("byte_per_type", False)
+            if byte_per_type: 
+                bytes_per_batch_single = len(Y.flatten())
+            else:
+                bytes_per_batch_single = sum(len(meta['itos'][y.item()].encode('utf-8')) for y in Y.flatten())
+        else: 
+            # gpt (tiktoken) vocab
+            bytes_per_batch_single=sum(len(block) for block in gptenc.decode_bytes_batch(Y))
+        bytes_per_batch.append(bytes_per_batch_single)
+bytes_per_batch_mean = np.mean(bytes_per_batch)
+bytes_per_batch_std = np.std(bytes_per_batch)
+bytes_per_block_mean = bytes_per_batch_mean/batch_size
+bytes_per_block_std = bytes_per_batch_std/batch_size
+
+print(f"bytes/block {bytes_per_block_mean:.4f} ± {bytes_per_block_std:.4f}")
+
 @torch.no_grad()
 def estimate_loss():
     out = {}
     model.eval()
     for split in ['train', 'val']:
-        loss_sum = 0
+        losses = []
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y, loss_reduction='sum')
-            loss_sum += loss.item()
-        out[split] = loss_sum
+                logits, loss_sum = model(X, Y, loss_reduction='sum')
+                losses.append(loss_sum.item())
+        out[split] = np.mean(losses)
     model.train()
     return out
 
@@ -274,7 +300,9 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        loss_train = losses['train']/bytes_per_batch_mean
+        loss_val = losses['val']/bytes_per_batch_mean
+        print(f"step {iter_num}: train loss {loss_train:.4f}, val loss {loss_val:.4f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -309,7 +337,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y)
+            logits, loss = model(X, Y, loss_reduction='sum')
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
@@ -336,6 +364,7 @@ while True:
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
+        lossf /= bytes_per_batch_mean # report normalized loss (per byte)
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
