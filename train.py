@@ -50,6 +50,7 @@ wandb_run_name = 'shakespeare-gpt'
 # data
 #dataset = 'shakespeare-char'
 dataset = 'shakespeare'
+vocab = 'byte' # possible values: byte, gpt2
 
 gradient_accumulation_steps = 1 # used to simulate larger batch sizes
 batch_size = 64 # if gradient_accumulation_steps > 1, this is the micro-batch size
@@ -125,7 +126,6 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # zebracky data loader
 data_dir = os.path.join('data', dataset)
-
 def get_batch(split):
     # We recreate np.memmap every batch to avoid a memory leak, as per
     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
@@ -156,10 +156,6 @@ if os.path.exists(meta_path):
     meta_vocab_size = meta['vocab_size']
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
-if meta_vocab_size is None: 
-    import tiktoken
-    gptenc = tiktoken.get_encoding('gpt2')
-
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout, force_no_flash=force_no_flash) # start with model_args from command line
@@ -167,9 +163,15 @@ if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
     # determine the vocab size we'll use for from-scratch training
-    if meta_vocab_size is None:
-        print("defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)")
-    model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
+    #if meta_vocab_size is None:
+        #print("defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)")
+    #model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
+    if vocab == 'gpt2': 
+        model_args['vocab_size'] = 50304
+    else: 
+        print("using byte vocab")
+        model_args['vocab_size'] = 256
+
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
 elif init_from == 'resume':
@@ -228,27 +230,24 @@ if compile:
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 
-bytes_per_batch = []
-for split in ['train', 'val']:
-    for _ in range(20):
-        X, Y = get_batch(split)
-        Y = Y.cpu().detach().numpy()
-        if meta_vocab_size is not None: 
-            byte_per_type = meta.get("byte_per_type", False)
-            if byte_per_type: 
-                bytes_per_batch_single = len(Y.flatten())
-            else:
-                bytes_per_batch_single = sum(len(meta['itos'][y.item()].encode('utf-8')) for y in Y.flatten())
-        else: 
-            # gpt (tiktoken) vocab
-            bytes_per_batch_single=sum(len(block) for block in gptenc.decode_bytes_batch(Y))
-        bytes_per_batch.append(bytes_per_batch_single)
-bytes_per_batch_mean = np.mean(bytes_per_batch)
-bytes_per_batch_std = np.std(bytes_per_batch)
-bytes_per_block_mean = bytes_per_batch_mean/batch_size
-bytes_per_block_std = bytes_per_batch_std/batch_size
-
-print(f"bytes/block {bytes_per_block_mean:.4f} ± {bytes_per_block_std:.4f}")
+# compute average bytes/batch to report normalized losses during training
+if vocab == 'gpt2':
+    import tiktoken
+    gptenc = tiktoken.get_encoding('gpt2')
+    print('estimating average bytes/block')
+    bpb = [] # bytes per block
+    for split in ['train', 'val']:
+        for _ in range(500): # => in total 1000*batch_size samples
+            Y = get_batch(split)[1].cpu().detach().numpy()
+            for block in gptenc.decode_bytes_batch(Y):
+                bpb.append(len(block))
+    print(f"bytes/block {np.mean(bpb):.4f} ± {np.std(bpb):.4f}")
+    bytes_per_batch = np.mean(bpb)*batch_size
+else: 
+    # byte vocab
+    bytes_per_batch = block_size*batch_size
+    print(f"bytes/block {block_size}")
+print(f'bytes/batch {bytes_per_batch}')
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -301,8 +300,8 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        loss_train = losses['train']/bytes_per_batch_mean
-        loss_val = losses['val']/bytes_per_batch_mean
+        loss_train = losses['train']/bytes_per_batch
+        loss_val = losses['val']/bytes_per_batch
         print(f"step {iter_num}: train loss {loss_train:.4f}, val loss {loss_val:.4f}")
         if wandb_log:
             wandb.log({
@@ -365,7 +364,7 @@ while True:
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        lossf /= bytes_per_batch_mean # report normalized loss (per byte)
+        lossf /= bytes_per_batch # report normalized loss (per byte)
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
