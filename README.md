@@ -8,10 +8,10 @@ changes:
   * there are now 2 possibilities:
     1. byte (default; `ord`/`chr` => encode/decode with ascii text)
     2. gpt2 (using `tiktoken.get_encoding('gpt2')`)
-  * for generation, checks automatically for config.vocab_size==256
+  * for generation, sets automatically to byte if `config.vocab_size==256`, else sets to gpt2
   * for training, need to specify argument `vocab` (possible values `'byte'`, `'gpt2'`)
 
-To do:
+to do:
 
 * local attention
 * regularized attention (entropy penalty)
