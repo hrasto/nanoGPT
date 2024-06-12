@@ -63,6 +63,7 @@ n_head = 8
 n_embd = 128
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
+force_no_flash = True
 
 learning_rate = 1e-3 # with baby networks can afford to go a bit higher
 max_iters = 5000
@@ -161,7 +162,7 @@ if meta_vocab_size is None:
 
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                  bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+                  bias=bias, vocab_size=None, dropout=dropout, force_no_flash=force_no_flash) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -227,7 +228,6 @@ if compile:
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 
-# helps estimate an arbitrarily accurate loss over either split using many batches
 bytes_per_batch = []
 for split in ['train', 'val']:
     for _ in range(20):
@@ -250,6 +250,7 @@ bytes_per_block_std = bytes_per_batch_std/batch_size
 
 print(f"bytes/block {bytes_per_block_mean:.4f} ± {bytes_per_block_std:.4f}")
 
+# helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
 def estimate_loss():
     out = {}
@@ -259,7 +260,7 @@ def estimate_loss():
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss_sum = model(X, Y, loss_reduction='sum')
+                logits, att, loss_sum = model(X, Y, loss_reduction='sum')
                 losses.append(loss_sum.item())
         out[split] = np.mean(losses)
     model.train()
@@ -337,7 +338,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y, loss_reduction='sum')
+            logits, att, loss = model(X, Y, loss_reduction='sum')
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
