@@ -10,8 +10,3 @@ changes:
     2. gpt2 (using `tiktoken.get_encoding('gpt2')`)
   * for generation, sets automatically to byte if `config.vocab_size==256`, else sets to gpt2
   * for training, need to specify argument `vocab` (possible values `'byte'`, `'gpt2'`)
-
-to do:
-
-* local attention
-* regularized attention (entropy penalty)
